@@ -10,7 +10,7 @@ m<-4+4
 
 n<-5+5
 # edit online
-<<<<<<< HEAD
+
 o<-6+6
 #edit in Rstudio
 p<-7
@@ -23,8 +23,10 @@ reprex()
 
 # edit again
 
-=======
 o->6+6
 #edit in Rstudio
 p->7
->>>>>>> f0fa641238e4995a00830355abc8f675dc9c5845
+
+#add code
+q->7
+
