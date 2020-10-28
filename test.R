@@ -1,13 +1,21 @@
 # this is a test of push and pull
 
-x->1+2
+x<-1
 
-y->2+2
+y<-2+2
 
-z->3+3
+z<-3+3
 
-m->4+4
+m<-4+4
 
-n->5+5
+n<-5+5
 # edit online
-o->6+6
+o<-6+6
+#edit in Rstudio
+p<-7
+
+library(reprex)
+A <- 1
+B <- 2
+C <- A+B
+reprex()
