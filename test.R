@@ -10,6 +10,7 @@ m<-4+4
 
 n<-5+5
 # edit online
+
 o<-6+6
 #edit in Rstudio
 p<-7
@@ -29,6 +30,6 @@ p->7
 q->7
 
 o->6+6
-#edit in Rstudio
+#i want to undo this
 p->7
 
