@@ -1,0 +1,260 @@
+---
+title: "spatial_descriptive_statistics"
+author: "LingruFeng"
+date: "2020/12/4"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Getting Started
+
+```{r message=FALSE, warning=FALSE}
+library(highcharter)
+library(tidyverse)
+library(downloader)
+library(rgdal)
+library(sf)
+library(ggplot2)
+library(reshape2)
+library(plotly)
+library(raster)
+library(downloader)
+library(rgdal)
+```
+
+## read data
+
+```{r message=TRUE}
+LondonWards <- st_read(here::here("prac8_data", 
+                                  "New_ward_data",
+                                  "NewLondonWard.shp"))
+```
+
+## add extra data
+
+```{r}
+extradata <- read_csv(here::here("prac8_data", "LondonAdditionalDataFixed.csv"))
+```
+
+```{r}
+LondonWardsleftjoin <- LondonWards %>%
+  left_join(.,extradata,
+            by = c("WD11CD" = "Wardcode"))
+
+#LondonWardsSF <- merge(LondonWards, extradata, by.x = "WD11CD", by.y = "Wardcode")
+```
+
+## Task 1 - Descriptive Statistics
+
+```{r}
+summary(extradata$AvgGCSE2011) 
+```
+
+```{r}
+#check which variables are numeric first
+
+Datatypelist <- LondonWardsleftjoin %>% 
+  st_drop_geometry()%>%
+  summarise_all(class) %>%
+  pivot_longer(everything(), 
+               names_to="All_variables", 
+               values_to="Variable_class")
+
+#make groups based on types of variables
+Groups <- LondonWardsleftjoin %>% 
+  st_drop_geometry()%>%
+  dplyr::select(is.numeric)%>%
+  pivot_longer(everything(),
+               names_to="All_variables", 
+               values_to="val")%>%
+  mutate(All_variables = tolower(All_variables))%>%
+  mutate(group = case_when(str_detect(All_variables, "age") ~ "Age",
+                           str_detect(All_variables, "employ|income|job|jsa") ~ "Employment",
+                           str_detect(All_variables, "house|rent|detatched|flat|terrace|owned|social|private|share|tax|mortgage") ~ "Housing", TRUE~"Other"))
+
+Employmenthist <- Groups%>%
+  filter(group=="Employment")%>%
+  ggplot(., aes(x=val)) + 
+  geom_histogram(aes(x = val, y = ..density..))+
+  geom_density(colour="red", size=1, adjust=1)+
+  facet_wrap(~All_variables, scales = 'free')
+
+print(Employmenthist)
+```
+
+## Plot Histogram by age
+
+```{r}
+Agehist1 <- Groups%>%
+  filter(group=="Age")%>%
+  ggplot(., aes(x=val)) + 
+  geom_histogram(aes(x = val, y = ..density..))+
+  geom_density(colour="red", size=1, adjust=1)+
+  facet_wrap(~All_variables, scales = 'free')
+Agehist1
+```
+
+## Log the age data
+
+```{r}
+Agehist <- Groups%>%
+  filter(group=="Age")%>%
+  ggplot(., aes(x=log10(val))) + 
+  geom_histogram(aes(x = log10(val), y = ..density..))+
+  geom_density(colour="red", size=1, adjust=1)+
+  facet_wrap(~All_variables, scales = 'free')
+Agehist
+```
+
+## Using Eastings and Northings data in the X and Y columns of the dataset, a 2D histogram and a 2D core density estimate of the Ward Centroids in London were created
+
+```{r}
+Londonpoint <- ggplot(LondonWardsleftjoin, aes(x=x.y,y=y.y))+geom_point()+coord_equal()
+Londonpoint
+```
+
+```{r}
+Londonpoint<-ggplot(LondonWardsleftjoin, aes(x=x.y,y=y.y))+stat_bin2d(bins=10)
+Londonpoint
+```
+
+```{r}
+Londonpoint<-ggplot(LondonWardsleftjoin, aes(x=x.y,y=y.y))+geom_point()+coord_equal()
+Londonpoint
+Londonpoint+stat_density2d(aes(fill = ..level..), geom="polygon")
+```
+
+## Task 2 - Function to recode data
+
+```{r}
+newvar<-0
+recode<-function(variable,high,medium,low){
+  newvar[variable<=high]<-"High"
+  newvar[variable<=medium]<-"Medium"
+  newvar[variable<=low]<-"Low"
+  return(newvar)
+}
+```
+
+```{r message=FALSE, warning=FALSE}
+attach(LondonWards)
+#Check the name of your column, there could be a slight error and it might be called 'AvgGCSED201'
+summary(LondonWards$AvgGCSE201) 
+```
+
+```{r}
+LondonWards$GCSE_recode <- recode(AvgGCSE201,409.1,358.3,332.3)
+```
+
+```{r}
+#Location Quotient function 1
+LQ1<-function(pctVariable){
+  pctVariable /mean(pctVariable)
+}
+#Location Quotient function 2
+LQ2<-function(variable,rowtotal){
+  localprop<-variable/rowtotal
+  globalprop<-sum(variable)/sum(rowtotal)
+  return(localprop/globalprop)
+}
+```
+
+```{r}
+head(LondonWards[,1:7])
+```
+
+## use function
+
+```{r}
+#this is pseudo code, but you should see how this works
+LondonWards$LQ_PctAged0_15 <- LQ1(PctAged0_1)
+#or
+LondonWards$LQ_Aged0_15 <- LQ2(Aged0_15,PopCensus2)
+
+LondonWards <- LondonWards %>% 
+  mutate(LQ_Aged16_65=LQ1(PctAged16_))
+
+summary(LondonWards$LQ_Aged0_15)
+```
+
+## Creating a Basic Geodemographic Classification
+
+```{r}
+LondonWardsData <- LondonWards %>%
+  #drop geometry
+  st_drop_geometry()%>%
+  #display list of variables
+  summarise_all(class) %>%
+  pivot_longer(everything(), 
+               names_to="All_variables", 
+               values_to="Variable_class")
+
+slice_head(LondonWardsData, n=5)
+```
+
+```{r}
+# Create a new data frame just containing the two variables we are interested in
+mydata <- LondonWards %>%
+      st_drop_geometry()%>%
+      dplyr::select(c(PctOwned20, PctNoEngli))
+
+#– check variable distributions first
+histplot <- ggplot(data=mydata, aes(x=PctOwned20))
+histplot +geom_histogram()
+```
+
+```{r}
+histplot <- ggplot(data=mydata, aes(x= PctNoEngli))
+histplot +geom_histogram()
+```
+
+```{r}
+fit <- mydata %>%
+  kmeans(., 3, nstart=25)
+```
+
+```{r message=TRUE, warning=TRUE}
+# get cluster means
+library(tidymodels)
+```
+
+```{r}
+centroid <- tidy(fit)%>%
+  #print the results of the cluster groupings
+  print()%>%
+  dplyr::select(PctOwned20, PctNoEngli)
+```
+
+```{r}
+# as we only have variable two dimensions we can plot the clusters on a graph
+p <- ggplot(mydata,aes(PctOwned20, PctNoEngli))+
+  geom_point(aes(colour=factor(fit$cluster)))+
+  geom_point(data=centroid,aes(PctOwned20, PctNoEngli), size=7, shape=18)+ theme(legend.position="none")
+p
+```
+
+```{r}
+LondonWards <- fit %>% 
+  # 
+  augment(., LondonWards)%>%
+  dplyr::select(WD11CD, .cluster)%>%
+  #make sure the .cluster column is numeric
+  mutate(across(.cluster, as.numeric))%>%
+  # join the .cluster to our sf layer
+  left_join(LondonWards, 
+            .,
+            by = c("WD11CD" = "WD11CD"))
+
+
+#now map our geodeomographic classification
+map <- ggplot(LondonWards) + 
+  geom_sf(mapping = aes(fill=.cluster))+
+  scale_fill_continuous(breaks=c(1,2,3))
+map
+```
